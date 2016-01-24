@@ -1,11 +1,14 @@
 from multidict import MultiDict as odict
+from bitstring import Bits, ConstBitStream
 import FileReader as fr
 
 def parse(filename):
 	out = odict()
 	with fr.FileReader(filename) as f:
 		out['base'] = parse_base(f)
-		#out['compressed'] = parse_compressed(f)
+		out['dlc'] = parse_dlcs(f)
+		out['blocks'] = parse_blocks(f)
+		out['compressed'] = parse_compressed(f)
 	return out
 
 def parse_base(f):
@@ -41,6 +44,36 @@ def parse_era(f):
 	era['current'] = f.read_string()
 	return era
 
+def parse_dlcs(f):
+	dlcs = odict()
+	while f.peek_int() != 0:
+		dlcs[unknown()] = f.read_bytes(16)
+		dlcs[unknown()] = f.read_bytes(4)
+		dlcs['dlc'] = f.read_string()
+	return dlcs
+
+def parse_blocks(f):
+	last_read = f.pos
+	positions = list(f.findall('0x40000000'))
+	f.pos = last_read
+	blocks = odict()
+	if f.pos < positions[0]:
+		assert((positions[0]-f.pos)%8==0)
+		blocks['prefix'] = f.read_bytes((positions[0]-f.pos)//8)
+	assert(f.pos == positions[0])
+	for i in range(len(positions)-1):
+		assert(f.pos == positions[i])
+		assert((positions[i+1]-positions[i])%8==0)
+		blocks[str(i)] = f.read_bytes((positions[i+1] - positions[i])//8)
+	return blocks
+
+def parse_compressed(f):
+	#todo - this just reads the rest at the moment
+	compressed = odict()
+	compressed[unknown()] = f.read_bytes((f.bits.length-f.pos)//8)
+	assert(f.pos == f.bits.length)
+	return compressed
+
 def unknown():
 	return "UnknownElement"+str(next(unknown.gen))
 
@@ -51,6 +84,37 @@ def unknown_gen():
 		a+=1
 unknown.gen = unknown_gen()
 
+def flatten(val):
+	try:
+		out = b''
+		for v in val.values():
+			out += flatten(v)
+		return out
+	except AttributeError:
+		return to_bits(val)
+
+def to_bits(val):
+	if isinstance(val, int):
+		return ConstBitStream(uintle=val, length=32)
+	elif isinstance(val, str):
+		return to_bits(len(val)) + val.encode()
+	return val
+
+def test(filename):
+	raw_bytes = open(filename,'rb').read()
+	processed_bytes = flatten(parse(filename)).bytes
+	index = 0
+	for v1, v2 in zip(raw_bytes, processed_bytes):
+		index+=1
+		if v1 != v2:
+			print(raw_bytes[:index+10])
+			print(processed_bytes[:index+10])
+			assert(False)
+
+
 if __name__ == "__main__":
 	import sys
-	print(parse(sys.argv[1]))
+	val = parse(sys.argv[1])
+	print(val)
+	test(sys.argv[1])
+

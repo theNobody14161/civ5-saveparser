@@ -11,6 +11,14 @@ class MultiDict:
 	def __setitem__(self, k, v):
 		self.data.append((k, v))
 
+	def keys(self):
+		for k,v in self.data:
+			yield k
+
+	def values(self):
+		for k,v in self.data:
+			yield v
+
 	def __str__(self):
 		return self.toStr(0)
 
