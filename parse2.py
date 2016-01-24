@@ -64,8 +64,23 @@ def parse_blocks(f):
 	for i in range(len(positions)-1):
 		assert(f.pos == positions[i])
 		assert((positions[i+1]-positions[i])%8==0)
-		blocks[str(i)] = f.read_bytes((positions[i+1] - positions[i])//8)
+		if i == 27:
+			blocks[str(i)] = parse_block_27(f, positions[i], positions[i+1])
+		else:
+			blocks[str(i)] = f.read_bytes((positions[i+1] - positions[i])//8)
 	return blocks
+
+def parse_block_27(f, start, end):
+	data = odict()
+	end-=5*8
+	data[unknown()] = f.read_bytes((end-start)//8)
+	data['VictoryFlag1'] = bytes([f.read_byte()])
+	data['VictoryFlag2'] = bytes([f.read_byte()])
+	data['VictoryFlag3'] = bytes([f.read_byte()])
+	data['VictoryFlag4'] = bytes([f.read_byte()])
+	data['VictoryFlag5'] = bytes([f.read_byte()])
+	return data
+
 
 def parse_compressed(f):
 	#todo - this just reads the rest at the moment
